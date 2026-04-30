@@ -34,6 +34,32 @@ class koradUdpComm(object):
                 print ("UDP timeout")
                 return " "
 
+    def udpSendRecvMultiline(self, message, max_lines=10):
+        # Bouw het bericht zoals voorheen
+        messageb = bytearray()
+        messageb.extend(map(ord, message))
+        messageb.append(0x0a)
+
+        self.sock.sendto(messageb, self.deviceAddress)
+        
+        full_response = []
+        self.sock.settimeout(0.5)  # Kortere timeout per regel
+        
+        try:
+            while len(full_response) < max_lines:
+                data, server = self.sock.recvfrom(4096) # Grotere buffer
+                if data:
+                    decoded_data = data.decode('utf-8').strip()
+                    full_response.append(decoded_data)
+                else:
+                    break
+        except socket.timeout:
+            # Timeout is hier het teken dat de Korad klaar is met sturen
+            pass
+            
+        return "\n".join(full_response)
+
+
     def udpSend(self, message):
         # build the message
         messageb = bytearray()
@@ -56,7 +82,13 @@ class kel103(object):
         Device info string containing device type, revision, and serial number
         """
         return self.device.udpSendRecv('*IDN?').strip()
-
+    
+    def lanInfo(self):
+        """
+        LAN info string containing IP address, netmask, gateway, and MAC address
+        """
+        return self.device.udpSendRecvMultiline(':SYST:DEVINFO?').strip() 
+    
     def checkDevice(self):
         """
         Returns True if the device returns a sane deviceInfo, False otherwise.
@@ -283,6 +315,7 @@ class kel103(object):
 
     def getBeep(self):
         return self.device.udpSendRecv(':SYST:BEEP?').strip() == "ON"
+    
     def setBeep(self, state):
         if state:
             self.device.udpSend(':SYST:BEEP 1')
